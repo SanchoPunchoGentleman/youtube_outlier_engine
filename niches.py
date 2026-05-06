@@ -1,0 +1,22 @@
+NICHES = [
+    'Custom Car Building', 'Rocket Engineering', 'Philosophy', 'Tiny House Living', '3D Animation Tutorials',
+    'Mechanical Keyboards', 'Aquascaping', 'Urban Exploration', 'Restoration Videos', 'Woodworking',
+    'Blacksmithing', 'Hydroponics', 'Mechanical Engineering', 'Quantum Physics Explained', 'Ancient History',
+    'Survival Skills', 'Van Life', 'Minimalism', 'Personal Finance', 'Stock Market Analysis',
+    'Cryptocurrency', 'Chess Strategy', 'Board Game Reviews', 'Solo Travel', 'Digital Nomad Life',
+    'Cybersecurity', 'Artificial Intelligence', 'Machine Learning', 'Data Science', 'Web Development',
+    'Mobile App Development', 'Game Development', 'Pixel Art', 'Digital Painting', 'Calligraphy',
+    'Photography Tips', 'Cinematography', 'Video Editing', 'Music Production', 'Modular Synthesizers',
+    'DJing', 'Audio Engineering', 'Podcasting', 'Voice Acting', 'Scriptwriting',
+    'Storytelling', 'Book Reviews', 'Poetry', 'Language Learning', 'Linguistics',
+    'Psychology', 'Neuroscience', 'Sociology', 'Anthropology', 'Astronomy',
+    'Astrophotography', 'Gardening', 'Permaculture', 'Beekeeping', 'Cooking Techniques',
+    'Baking', 'Fermentation', 'Coffee Brewing', 'Tea Ceremony', 'Wine Tasting',
+    'Cocktail Making', 'Mixology', 'Interior Design', 'Architecture', 'Sustainable Living',
+    'Zero Waste', 'Sewing', 'Knitting', 'Leatherworking', 'Jewelry Making',
+    'Watch Restoration', 'Model Building', 'RC Planes', 'Drones', 'Robotics',
+    'Arduino Projects', 'Raspberry Pi', 'Home Automation', 'Solar Power', 'Off-Grid Living',
+    'Bushcraft', 'Camping Gear Reviews', 'Hiking', 'Rock Climbing', 'Yoga',
+    'Meditation', 'Biohacking', 'Longevity', 'Fitness for Seniors', 'Calisthenics',
+    'Martial Arts', 'Self Defense', 'Magic Tricks', 'Mentalism', 'Street Photography'
+]

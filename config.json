@@ -1,0 +1,8 @@
+{
+  "threshold": 3.0,
+  "regions": ["US", "GB", "AU", "CA"],
+  "language": "en",
+  "manual_niches": ["Gaming: Minecraft", "Digital Marketing", "SaaS Growth"],
+  "manual_channels": [],
+  "exclusions": ["alcohol", "pork", "interest", "obscene content"]
+}
