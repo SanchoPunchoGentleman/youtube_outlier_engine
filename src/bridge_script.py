@@ -2,11 +2,12 @@ import pandas as pd
 import os
 
 # Paths configuration
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASE_PATH = "/Users/Sanzhar/Documents/Obsidian vault/YouTube_brain/"
 NICHE_DIR = os.path.join(BASE_PATH, "01_Niches/")
 CHANNEL_DIR = os.path.join(BASE_PATH, "02_Channels/")
 PATTERN_DIR = os.path.join(BASE_PATH, "03_Patterns/")
-CSV_PATH = os.path.expanduser("~/youtube_outlier_engine/master_niches.csv")
+CSV_PATH = os.path.join(BASE_DIR, 'data', 'master_niches.csv')
 
 def bridge_the_graph():
     # Load CSV and normalize column names to lowercase to prevent KeyErrors

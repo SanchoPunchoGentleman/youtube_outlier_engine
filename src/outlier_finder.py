@@ -8,7 +8,8 @@ from tqdm import tqdm
 from niches import NICHES
 
 # Load Configuration
-CONFIG_PATH = 'config.json'
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CONFIG_PATH = os.path.join(BASE_DIR, 'config', 'config.json')
 with open(CONFIG_PATH, 'r') as f:
     config = json.load(f)
 
@@ -18,7 +19,7 @@ OBSIDIAN_BASE_PATH = '/Users/Sanzhar/Documents/Obsidian vault/YouTube_brain'
 CHANNELS_FOLDER = os.path.join(OBSIDIAN_BASE_PATH, '02_Channels')
 NICHES_FOLDER = os.path.join(OBSIDIAN_BASE_PATH, '01_Niches')
 PATTERNS_FOLDER = os.path.join(OBSIDIAN_BASE_PATH, '03_Patterns')
-MASTER_NICHES_CSV = 'master_niches.csv'
+MASTER_NICHES_CSV = os.path.join(BASE_DIR, 'data', 'master_niches.csv')
 
 youtube = build('youtube', 'v3', developerKey=API_KEY)
 
