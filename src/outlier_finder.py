@@ -2,8 +2,9 @@ import os
 import csv
 import json
 import subprocess
-from googleapiclient.discovery import build
-from youtubesearchpython import ChannelsSearch
+import re
+import httpx
+from youtubesearchpython import VideosSearch
 from tqdm import tqdm
 from niches import NICHES
 
@@ -13,15 +14,72 @@ CONFIG_PATH = os.path.join(BASE_DIR, 'config', 'config.json')
 with open(CONFIG_PATH, 'r') as f:
     config = json.load(f)
 
+
+from dotenv import load_dotenv
+
+# Load the environment variables from the .env file
+load_dotenv()
+
 # Constants
-API_KEY = 'AIzaSyB4_KqvdsGHxguk-kV3zwLWfXZRRJ_OF9c'
+API_KEY = os.getenv('YOUTUBE_API_KEY')
+
+# Constants
 OBSIDIAN_BASE_PATH = '/Users/Sanzhar/Documents/Obsidian vault/YouTube_brain'
 CHANNELS_FOLDER = os.path.join(OBSIDIAN_BASE_PATH, '02_Channels')
 NICHES_FOLDER = os.path.join(OBSIDIAN_BASE_PATH, '01_Niches')
 PATTERNS_FOLDER = os.path.join(OBSIDIAN_BASE_PATH, '03_Patterns')
 MASTER_NICHES_CSV = os.path.join(BASE_DIR, 'data', 'master_niches.csv')
 
-youtube = build('youtube', 'v3', developerKey=API_KEY)
+def parse_count(count_str):
+    if not count_str:
+        return 0
+    count_str = count_str.replace(',', '').upper()
+    
+    # Handle "Million", "Thousand", "Billion"
+    multiplier = 1
+    if 'MILLION' in count_str or 'M' in count_str:
+        multiplier = 1000000
+    elif 'THOUSAND' in count_str or 'K' in count_str:
+        multiplier = 1000
+    elif 'BILLION' in count_str or 'B' in count_str:
+        multiplier = 1000000000
+        
+    match = re.search(r'([\d.]+)', count_str)
+    if not match:
+        return 0
+    return int(float(match.group(1)) * multiplier)
+
+def get_subs_count(channel_url):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9"
+    }
+    try:
+        with httpx.Client(headers=headers, follow_redirects=True, timeout=10.0) as client:
+            r = client.get(channel_url)
+            # Match formats like "1.23M subscribers"
+            match = re.search(r'"subscriberCountText":\{"accessibility":\{"accessibilityData":\{"label":"(.*?)"\}', r.text)
+            if match:
+                return parse_count(match.group(1))
+            match = re.search(r'"subscriberCountText":\{"simpleText":"(.*?)"\}', r.text)
+            if match:
+                return parse_count(match.group(1))
+    except:
+        pass
+    return 0
+
+def get_recent_titles(channel_url):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9"
+    }
+    try:
+        with httpx.Client(headers=headers, follow_redirects=True, timeout=10.0) as client:
+            r = client.get(f"{channel_url}/videos")
+            titles = re.findall(r'"videoRenderer":\{"videoId":".*?","title":\{"runs":\[\{"text":"(.*?)"\}\]', r.text)
+            return titles[:5]
+    except:
+        return []
 
 def check_exclusions(text):
     if not text:
@@ -32,60 +90,8 @@ def check_exclusions(text):
             return True
     return False
 
-def get_channel_stats(channel_id):
-    try:
-        request = youtube.channels().list(
-            part="statistics,snippet,contentDetails",
-            id=channel_id
-        )
-        response = request.execute()
-        if not response['items']:
-            return None
-        item = response['items'][0]
-        
-        # Ethical Guardrail check on snippet
-        if check_exclusions(item['snippet']['title']) or check_exclusions(item['snippet']['description']):
-            return None
-            
-        return {
-            'title': item['snippet']['title'],
-            'subs': int(item['statistics'].get('subscriberCount', 0)),
-            'id': channel_id,
-            'uploads_id': item['contentDetails']['relatedPlaylists']['uploads']
-        }
-    except Exception:
-        return None
-
-def get_last_5_videos(uploads_id):
-    try:
-        request = youtube.playlistItems().list(
-            part="snippet,contentDetails",
-            playlistId=uploads_id,
-            maxResults=5
-        )
-        response = request.execute()
-        video_ids = [item['contentDetails']['videoId'] for item in response['items']]
-        titles = [item['snippet']['title'] for item in response['items']]
-        
-        if not video_ids:
-            return [], []
-            
-        # Ethical Guardrail check on titles
-        for title in titles:
-            if check_exclusions(title):
-                return [], []
-                
-        request = youtube.videos().list(
-            part="statistics",
-            id=",".join(video_ids)
-        )
-        response = request.execute()
-        views = [int(item['statistics'].get('viewCount', 0)) for item in response['items']]
-        return views, titles
-    except Exception:
-        return [], []
-
 def extract_patterns(titles):
+    if not titles: return ""
     titles_str = "\n".join(titles)
     prompt = (
         "Analyze these YouTube video titles for high-authority B2B structural patterns. "
@@ -99,106 +105,89 @@ def extract_patterns(titles):
     except Exception:
         return ""
 
-def generate_niche_summary(niche_batch, batch_index):
-    file_path = os.path.join(NICHES_FOLDER, f"Niche_Rollup_{batch_index}.md")
-    with open(file_path, 'w') as f:
-        f.write(f"# Niche Saturation Report: Batch {batch_index}\n\n")
-        f.write("| Niche | Outliers Found | Avg Outlier Score | Top Pattern |\n")
-        f.write("|-------|----------------|-------------------|-------------|\n")
-        for data in niche_batch:
-            f.write(f"| {data['niche']} | {data['count']} | {data['avg_score']} | {data['top_pattern']} |\n")
-
-def update_pattern_master(pattern_name, context_niche):
-    safe_pattern = pattern_name.replace('#', '').strip()
-    file_path = os.path.join(PATTERNS_FOLDER, f"{safe_pattern}.md")
-    
-    exists = os.path.exists(file_path)
-    mode = 'a' if exists else 'w'
-    
-    with open(file_path, mode) as f:
-        if not exists:
-            f.write(f"# Pattern Master Template: {pattern_name}\n\n")
-            f.write("## Description\nHigh-performance structural pattern identified across multiple niches.\n\n")
-            f.write("## Observations\n")
-        f.write(f"- Identified in niche: {context_niche}\n")
-
 def main():
-    for folder in [CHANNELS_FOLDER, NICHES_FOLDER, PATTERNS_FOLDER]:
+    for folder in [CHANNELS_FOLDER, NICHES_FOLDER, PATTERNS_FOLDER, os.path.join(BASE_DIR, 'data')]:
         if not os.path.exists(folder):
             os.makedirs(folder)
             
     combined_niches = list(set(NICHES + config['manual_niches']))
-    pattern_tracker = {} # pattern -> set(niches)
+    pattern_tracker = {}
     niche_batch_data = []
-    
     processed_count = 0
-    
-    for niche in tqdm(combined_niches, desc="Scanning Niches (v2.0)"):
+    processed_channels = set()
+
+    for niche in tqdm(combined_niches, desc="Scanning Niches (Hybrid)"):
         if check_exclusions(niche):
             continue
             
         try:
-            # Strictly use US/en as requested
-            search = ChannelsSearch(niche, limit=10, region='US', language='en')
-            results = search.result()['result']
-            channel_ids = [res['id'] for res in results]
+            videos_search = VideosSearch(niche, limit=15, region='US', language='en')
+            results = videos_search.result()['result']
             
             niche_outliers = []
-            for cid in channel_ids:
-                stats = get_channel_stats(cid)
-                if not stats or stats['subs'] < 1000:
+            for video in results:
+                channel_id = video['channel']['id']
+                channel_url = video['channel']['link']
+                if channel_id in processed_channels:
                     continue
-                    
-                views, titles = get_last_5_videos(stats['uploads_id'])
-                if not views:
-                    continue
-                    
-                avg_views = sum(views) / len(views)
-                outlier_score = avg_views / stats['subs']
+                processed_channels.add(channel_id)
+                
+                subs = get_subs_count(channel_url)
+                if subs < 1000: continue
+                
+                view_count = parse_count(video.get('viewCount', {}).get('short', '0'))
+                if view_count == 0: continue
+                
+                outlier_score = view_count / subs
                 
                 if outlier_score > config['threshold']:
+                    titles = get_recent_titles(channel_url)
+                    if not titles: titles = [video['title']]
+                    
                     patterns = extract_patterns(titles)
                     outlier_data = {
                         'Niche': niche,
-                        'Channel': stats['title'],
-                        'Subs': stats['subs'],
-                        'AvgViews': int(avg_views),
+                        'Channel': video['channel']['name'],
+                        'Subs': subs,
+                        'AvgViews': int(view_count),
                         'OutlierScore': round(outlier_score, 2),
                         'Patterns': patterns,
-                        'URL': f"https://www.youtube.com/channel/{cid}"
+                        'URL': channel_url
                     }
                     niche_outliers.append(outlier_data)
                     
-                    # Track patterns for Master Templates
+                    # Pattern tracking
                     for p in patterns.split(','):
                         p = p.strip()
                         if p:
-                            if p not in pattern_tracker:
-                                pattern_tracker[p] = set()
+                            if p not in pattern_tracker: pattern_tracker[p] = set()
                             pattern_tracker[p].add(niche)
-                            if len(pattern_tracker[p]) > 1: # Found in multiple niches
-                                update_pattern_master(p, niche)
+                            if len(pattern_tracker[p]) > 1:
+                                # Update pattern master file
+                                safe_pattern = p.replace('#', '').strip()
+                                pf = os.path.join(PATTERNS_FOLDER, f"{safe_pattern}.md")
+                                with open(pf, 'a' if os.path.exists(pf) else 'w') as f:
+                                    if not os.path.exists(pf):
+                                        f.write(f"# Pattern Master: {p}\n\n## Observations\n")
+                                    f.write(f"- Seen in: {niche}\n")
                     
-                    # Generate Obsidian Note (B2B Style)
-                    safe_title = "".join([c for c in stats['title'] if c.isalnum() or c in (' ', '_')]).strip()
+                    # Generate Obsidian Note
+                    safe_title = "".join([c for c in video['channel']['name'] if c.isalnum() or c in (' ', '_')]).strip()
                     file_path = os.path.join(CHANNELS_FOLDER, f"{safe_title}.md")
                     with open(file_path, 'w') as f:
                         f.write(f"---\n")
                         f.write(f"type: channel_analysis\n")
                         f.write(f"niche: {niche}\n")
-                        f.write(f"metric_subs: {stats['subs']}\n")
-                        f.write(f"metric_avg_views: {int(avg_views)}\n")
+                        f.write(f"metric_subs: {subs}\n")
+                        f.write(f"metric_anchor_views: {view_count}\n")
                         f.write(f"performance_ratio: {round(outlier_score, 2)}\n")
-                        f.write(f"status: high_performance\n")
                         f.write(f"--- \n\n")
-                        f.write(f"# Analysis: {stats['title']}\n\n")
-                        f.write(f"## Data Points\n")
-                        f.write(f"- **Authority Level**: {'High' if stats['subs'] > 50000 else 'Emerging'}\n")
-                        f.write(f"- **Content Velocity**: Last 5 videos analysis\n")
-                        f.write(f"- **URL**: {outlier_data['URL']}\n\n")
+                        f.write(f"# Analysis: {video['channel']['name']}\n\n")
+                        f.write(f"## Discovery Method\n")
+                        f.write(f"Viral anchor: `{video['title']}`\n\n")
                         f.write(f"## Structural Patterns\n")
                         f.write(f"{patterns}\n\n")
-                        f.write(f"## Recent Content Output\n")
+                        f.write(f"## Recent Content\n")
                         for t in titles:
                             f.write(f"- {t}\n")
 
@@ -213,26 +202,24 @@ def main():
                 })
             
             # Save to CSV
-            file_exists = os.path.isfile(MASTER_NICHES_CSV)
             with open(MASTER_NICHES_CSV, 'a', newline='') as f:
                 writer = csv.DictWriter(f, fieldnames=['Niche', 'Channel', 'Subs', 'AvgViews', 'OutlierScore', 'Patterns', 'URL'])
-                if not file_exists:
+                if f.tell() == 0:
                     writer.writeheader()
-                writer.writerows(niche_outliers[:10])
+                writer.writerows(niche_outliers)
             
             processed_count += 1
             if processed_count % 100 == 0:
-                generate_niche_summary(niche_batch_data, processed_count // 100)
+                # Generate niche rollup
+                rf = os.path.join(NICHES_FOLDER, f"Niche_Rollup_{processed_count // 100}.md")
+                with open(rf, 'w') as f:
+                    f.write(f"# Niche Rollup {processed_count // 100}\n\n| Niche | Count | Avg Score |\n|---|---|---|\n")
+                    for d in niche_batch_data:
+                        f.write(f"| {d['niche']} | {d['count']} | {d['avg_score']} |\n")
                 niche_batch_data = []
 
-        except Exception as e:
-            if "quotaExceeded" in str(e):
-                break
+        except Exception:
             continue
-            
-    # Final rollup if any left
-    if niche_batch_data:
-        generate_niche_summary(niche_batch_data, (processed_count // 100) + 1)
 
 if __name__ == "__main__":
     main()

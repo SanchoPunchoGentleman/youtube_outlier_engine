@@ -1,0 +1,8 @@
+{
+  "threshold": 3.0,
+  "regions": ["US"],
+  "language": "en",
+  "manual_niches": ["Car Flipping Profit"],
+  "manual_channels": [],
+  "exclusions": ["alcohol"]
+}
